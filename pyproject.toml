@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "conduct-wire"
+version = "0.1.0"
+description = "Inbound signed-request verification for the OMB estate — the one implementation both CON and Fix verify with."
+requires-python = ">=3.12"
+dependencies = [
+    "orc-wire @ git+https://github.com/omb-software/orc-wire.git@b5700b294e58e737b32a1502c04bc10e94251d6b",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/conduct_wire"]
+
+[tool.ruff]
+line-length = 100
