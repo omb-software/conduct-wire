@@ -116,12 +116,32 @@ def test_the_query_string_is_signature_covered(keys):
 
 def test_the_nonce_window_prunes_so_it_cannot_grow_without_bound(keys):
     """A flood of distinct nonces must not be an unbounded memory write."""
-    window = NonceWindow(window_seconds=10)
+    window = NonceWindow(skew_seconds=10)
     for i in range(50):
         assert window.consume(f"n{i}", now=1000.0)
     assert len(window._seen) == 50
     window.consume("later", now=1000.0 + 100)
     assert len(window._seen) == 1, "everything outside the window should have been swept"
+
+
+def test_a_nonce_is_remembered_for_TWICE_the_skew(keys):
+    """The retention factor, which is not slack.
+
+    Freshness accepts a timestamp anywhere in ±skew, so two requests carrying one nonce can
+    legitimately arrive up to 2×skew apart. A nonce forgotten after only `skew` would be replayable
+    at the edges of exactly the band freshness permits. Halving it during the extraction is a
+    mistake this test exists to catch — it was made, and caught, on the first run."""
+    window = NonceWindow(skew_seconds=100)
+    assert window.consume("n", now=1000.0)
+    assert not window.consume("n", now=1000.0 + 150), "still inside 2×skew — must be a replay"
+    assert window.consume("n", now=1000.0 + 250), "beyond 2×skew — safely forgotten"
+
+
+def test_reset_forgets_everything(keys):
+    window = NonceWindow()
+    assert window.consume("n", now=1000.0)
+    window.reset()
+    assert window.consume("n", now=1000.0), "reset must clear the window"
 
 
 def test_nothing_in_this_package_imports_an_application(keys):

@@ -60,19 +60,31 @@ class NonceWindow:
     dict cannot grow without limit under a flood of distinct nonces.
     """
 
-    def __init__(self, window_seconds: int = MAX_CLOCK_SKEW_SECONDS) -> None:
-        self._window = window_seconds
+    def __init__(self, skew_seconds: int = MAX_CLOCK_SKEW_SECONDS) -> None:
+        self._skew = skew_seconds
         self._seen: dict[str, float] = {}
 
     def consume(self, nonce: str, now: float) -> bool:
         """True if `nonce` is unseen within the window (and records it); False if it is a replay."""
+        # RETAINED FOR TWICE THE SKEW, and that factor is not slack. Freshness accepts a timestamp
+        # anywhere in ±skew, so two requests bearing one nonce can legitimately arrive up to 2×skew
+        # apart — a nonce forgotten after only `skew` would be replayable at the edges of exactly
+        # the band the freshness check permits. (Carried over from Conduct's original, where the
+        # factor was present but its reason was not written down; extracting it is what surfaced
+        # the question.)
+        cutoff = now - 2 * self._skew
         for seen_nonce, seen_at in list(self._seen.items()):
-            if now - seen_at > self._window:
+            if seen_at < cutoff:
                 del self._seen[seen_nonce]
         if nonce in self._seen:
             return False
         self._seen[nonce] = now
         return True
+
+    def reset(self) -> None:
+        """Forget every nonce. For tests and for a deliberate operator reset — never on the request
+        path, where it would hand an attacker a replay window."""
+        self._seen.clear()
 
 
 def verify_signed_request(
